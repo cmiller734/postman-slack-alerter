@@ -1,0 +1,826 @@
+{
+	"info": {
+		"_postman_id": "5a01fdb0-21a9-433c-b1d4-4b5c7f3a8f50",
+		"name": "Slack Alerter - Every Fatal Check Event",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "6874630"
+	},
+	"item": [
+		{
+			"name": "Get Top Level Groups",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Original script created by {redacted}",
+							"// Updated for integration into Slack by Caleb Miller",
+							"// Created date: 2023-09-20",
+							"// Last update: 2023-10-10",
+							"// Revision: 1.0",
+							"//",
+							"// Required params in asm: ",
+							"// slack_service_id (for alerting to Slack)",
+							"// apiAddress ({redacted})",
+							"// api_key (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// top level check group ID (the top level group ID, can be found using {redacted})",
+							"",
+							"pm.test(\"Response must be valid and have a json body\", function () {",
+							"     pm.response.to.be.ok;",
+							"     pm.response.to.be.withBody;",
+							"     pm.response.to.be.json;",
+							"     pm.expect(pm.response.text()).to.include(\"id\");",
+							"     pm.expect(pm.response.headers.get('Content-Type')).to.eql('application/json\\; charset=utf-8');",
+							"});",
+							"",
+							"//use the top level group ID to get the IDs of all subgroups, as subgroups contain checks and top level groups do not",
+							"const jsonData = pm.response.json();",
+							"const topLevelId = pm.environment.get(\"top_level_group_id\")",
+							"const topLevelIdObj = jsonData.filter(obj => obj.id == topLevelId)[0] //[0] bc return of filter() is an array, so get the only obj in the array",
+							"const subGroupIdArr = topLevelIdObj.groups.map(subgroup => { ",
+							"    return subgroup.id",
+							"})",
+							"",
+							"//clear the check group array out",
+							"pm.collectionVariables.set(\"checks\",\"[]\");",
+							"// Store all the subgroup ids in the environment variable",
+							"pm.collectionVariables.set(\"subGroupIdArr\", JSON.stringify(subGroupIdArr))",
+							"// Set the initial value of \"next index\" to 0 - this will be used for getting all of the checks in each subgroup",
+							"pm.collectionVariables.set('nextIndex', 0);",
+							"// set the activeSubGroupId to the first subgroup ID",
+							"pm.collectionVariables.set('activeSubgroupId', subGroupIdArr[0]);"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{apiAddress}}/v3/groups?auth_ticket={{api_key}}",
+					"protocol": "https",
+					"host": [
+						"{{apiAddress}}"
+					],
+					"path": [
+						"v3",
+						"groups"
+					],
+					"query": [
+						{
+							"key": "auth_ticket",
+							"value": "{{api_key}}"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Checks of Each Subgroup",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Original script created by {redacted}",
+							"// Updated for integration into Slack by Caleb Miller",
+							"// Created date: 2023-09-20",
+							"// Last update: 2023-10-03",
+							"// Revision: 1.0",
+							"//",
+							"// Required params in asm: ",
+							"// slack_service_id (for alerting to Slack)",
+							"// apiAddress ({redacted})",
+							"// api_key (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// top level check group ID (the top level group ID, can be found using {redacted})",
+							"pm.test(\"Response must be 200 OK\", function () {",
+							"     pm.response.to.have.status(200);",
+							"});",
+							"",
+							"let subGroupIdArr = JSON.parse(pm.collectionVariables.get(\"subGroupIdArr\"))",
+							"var subGroupChecks = pm.response.json()",
+							"var checksArr = JSON.parse(pm.collectionVariables.get(\"checks\"))",
+							"",
+							"subGroupChecks.forEach(checkId => {",
+							"    checksArr.push(checkId)",
+							"})",
+							"",
+							"pm.collectionVariables.set(\"checks\", JSON.stringify(checksArr));",
+							"",
+							"// Increment the next Index",
+							"    nextIndex = parseInt(pm.collectionVariables.get('nextIndex')) + 1;",
+							"",
+							"// In case comments have been fetched for all requests then we're done here",
+							"// time to end the collection run and clean up the environment and activePRID",
+							"if (subGroupIdArr.length === nextIndex) {",
+							"    // pm.collectionVariables.set('nextIndex', 0);",
+							"    // pm.collectionVariables.set('subGroupIdArr', JSON.stringify(subGroupIdArr[0]));",
+							"    postman.setNextRequest(\"Get All ASM Checks\");",
+							"}",
+							"else {",
+							"    pm.collectionVariables.set('nextIndex', nextIndex);",
+							"    //since you incremented nextIndex earlier in the script, the next time this script runs it will use the next subgroup ID in the array",
+							"    pm.collectionVariables.set('nextIndexForChecks', 0)",
+							"    pm.collectionVariables.set('activeSubgroupId', subGroupIdArr[nextIndex]);",
+							"    // pm.collectionVariables.set('subGroupIdArr', JSON.stringify(subGroupIdArr));",
+							"    // Now run the get comments request again to get the comments",
+							"    // for the next request",
+							"    postman.setNextRequest(\"Get Checks of Each Subgroup\");",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"packages": {},
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{apiAddress}}/v3/groups/{{activeSubgroupId}}/checks?auth_ticket={{api_key}}",
+					"protocol": "https",
+					"host": [
+						"{{apiAddress}}"
+					],
+					"path": [
+						"v3",
+						"groups",
+						"{{activeSubgroupId}}",
+						"checks"
+					],
+					"query": [
+						{
+							"key": "auth_ticket",
+							"value": "{{api_key}}"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get All ASM Checks",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Created by {redacted}",
+							"// Created date: 2021-11-16",
+							"// Last update: 2021-12-02",
+							"// Revision: 1.1",
+							"//",
+							"//",
+							"// Required params in asm: ",
+							"// apiAddress ({redacted})",
+							"// authTicket (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// checks (1234|4321|5555 etc)",
+							"//",
+							"// If you use the serviceNow portion of the script you also need:",
+							"// crptusername (username in encrypted format)",
+							"// crptpassword (password in encrypted format)",
+							"// sUsr (salt to decrypt the username)",
+							"// sPwd (salt to decrypt the password)",
+							"",
+							"",
+							"pm.test(\"Response must be valid and have a json body\", function () {",
+							"     pm.response.to.be.ok;",
+							"     pm.response.to.be.withBody;",
+							"     pm.response.to.be.json;",
+							"     pm.expect(pm.response.text()).to.include(\"guid\");",
+							"     pm.expect(pm.response.headers.get('Content-Type')).to.eql('application/json\\; charset=utf-8');",
+							"});",
+							"var checks = JSON.parse(pm.collectionVariables.get(\"checks\"));",
+							"pm.collectionVariables.set(\"_alertcounter\", \"0\");",
+							"",
+							"var jsonData = pm.response.json();",
+							"var checkArray = [];",
+							"",
+							"",
+							"for (let i = 0; i < checks.length; i++) {",
+							"    const foundIndex = jsonData.findIndex(el => el.id == parseInt(checks[i]));",
+							"    if (foundIndex >=0){",
+							"        if (jsonData[foundIndex].enabled == true){",
+							"            var inputData = [",
+							"                {checkName: jsonData[foundIndex].name, checkID: jsonData[foundIndex].id, checkTypeName: jsonData[foundIndex].check_type_name, timeStamp: jsonData[foundIndex].timestamp_utc, errorMsg: jsonData[foundIndex].last_result_details.message, checkGUID: jsonData[foundIndex].guid, severity: jsonData[foundIndex].severity}",
+							"            ];",
+							"            inputData.map(function(item) {        ",
+							"                checkArray.push({ ",
+							"                    \"checkName\" :   item.checkName,",
+							"                    \"checkID\"   :   item.checkID,",
+							"                    \"checkTypeName\" : item.checkTypeName,",
+							"                    \"timeStamp\" :   item.timeStamp,",
+							"                    \"errorMsg\"  :   item.errorMsg,",
+							"                    \"checkGUID\" :   item.checkGUID,",
+							"                    \"severity\"  :   item.severity",
+							"                });",
+							"            });",
+							"        }",
+							"    }",
+							"",
+							"}",
+							"if (checkArray == \"\"){",
+							"    postman.setNextRequest(null);",
+							"}else{",
+							"var jsonString = JSON.stringify(checkArray);",
+							"pm.collectionVariables.set(\"activeCheck\",checks[0])",
+							"pm.collectionVariables.set(\"_jsonString\", jsonString);",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"packages": {},
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{apiAddress}}/v3/Checks/?enabled=true&auth_ticket={{api_key}}",
+					"protocol": "https",
+					"host": [
+						"{{apiAddress}}"
+					],
+					"path": [
+						"v3",
+						"Checks",
+						""
+					],
+					"query": [
+						{
+							"key": "enabled",
+							"value": "true"
+						},
+						{
+							"key": "auth_ticket",
+							"value": "{{api_key}}"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Last Result of Check",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Original script created by {redacted}",
+							"// Updated for integration into Slack by Caleb Miller",
+							"// Created date: 2023-09-20",
+							"// Last update: 2023-10-03",
+							"// Revision: 1.0",
+							"//",
+							"// Required params in asm: ",
+							"// slack_service_id (for alerting to Slack)",
+							"// apiAddress ({redacted})",
+							"// api_key (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// top level check group ID (the top level group ID, can be found using {redacted})",
+							"",
+							"pm.test(\"Response must be 200 OK\", function () {",
+							"     pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// _jsonString is an array of the checks. Get the array so you can add resultId and timestamp.",
+							"var checksArrayWithoutGuid = JSON.parse(pm.collectionVariables.get(\"_jsonString\"))",
+							"var nextCheckIndex = pm.collectionVariables.get(\"nextIndexForChecks\")",
+							"",
+							"//add these properties to the JSON check object, one by one. Set them to appropriate values if they exist.",
+							"checksArrayWithoutGuid[nextCheckIndex].resultId = null",
+							"checksArrayWithoutGuid[nextCheckIndex].timeStamp = null",
+							"if (pm.response.json()[0]) {",
+							"    if (pm.response.json()[0].identifier) {",
+							"        checksArrayWithoutGuid[nextCheckIndex].resultId = pm.response.json()[0].identifier",
+							"    } ",
+							"    if (pm.response.json()[0].timestamp_utc) {",
+							"        checksArrayWithoutGuid[nextCheckIndex].timeStamp = pm.response.json()[0].timestamp_utc",
+							"    }",
+							"}",
+							"",
+							"//now that the values are added to each object, write the updated string back into the old variable",
+							"pm.collectionVariables.set(\"_jsonString\",JSON.stringify(checksArrayWithoutGuid))",
+							"//increment the check counter",
+							"var nextIndexForChecksPlusOne = parseInt(pm.collectionVariables.get('nextIndexForChecks')) + 1;",
+							"pm.collectionVariables.set(\"nextIndexForChecks\", nextIndexForChecksPlusOne)",
+							"",
+							"//if youve called the Results API once for each check ID, it's time to move on",
+							"if (checksArrayWithoutGuid.length === nextIndexForChecksPlusOne) {",
+							"    postman.setNextRequest(\"GET dictionary\");",
+							"} else {",
+							"    //if not, set the active check to the next one in the array",
+							"    pm.collectionVariables.set(\"activeCheck\", checksArrayWithoutGuid[nextIndexForChecksPlusOne].checkID)",
+							"    postman.setNextRequest(\"Get Last Result of Check\")",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{redacted}/{{activeCheck}}/results?mostrecent=1&detail_level=1&auth_ticket={{api_key}}",
+					"protocol": "http",
+					"host": [
+						"api-asm1",
+						"{redacted}",
+						"io"
+					],
+					"path": [
+						"v3",
+						"checks",
+						"{{activeCheck}}",
+						"results"
+					],
+					"query": [
+						{
+							"key": "mostrecent",
+							"value": "1"
+						},
+						{
+							"key": "detail_level",
+							"value": "1"
+						},
+						{
+							"key": "auth_ticket",
+							"value": "{{api_key}}"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET dictionary",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Original script created by {redacted}",
+							"// Updated for integration into Slack by Caleb Miller",
+							"// Created date: 2023-09-20",
+							"// Last update: 2023-10-03",
+							"// Revision: 1.0",
+							"//",
+							"// Required params in asm: ",
+							"// slack_service_id (for alerting to Slack)",
+							"// apiAddress ({redacted})",
+							"// api_key (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// top level check group ID (the top level group ID, can be found using {redacted})",
+							"",
+							"pm.test(\"Response must be 200 OK\", function () {",
+							"     pm.response.to.have.status(200);",
+							"});",
+							"",
+							"//here you are simply pulling the check ID and the timestamp of all the checks which are added to the old dictionary, that is DONT need to be alerted on",
+							"var jsonData = pm.response.json();",
+							"var checkArray = [];",
+							"",
+							"for (const [key, value] of Object.entries(jsonData)) {",
+							"    var inputData = [",
+							"        {checkID: `${key}`, timeStamp: `${value}`}",
+							"    ];",
+							"",
+							"    inputData.map(function(item) {        ",
+							"        checkArray.push({ ",
+							"            \"checkID\"   :   item.checkID,",
+							"            \"timeStamp\" :   item.timeStamp",
+							"        });",
+							"    });",
+							"}",
+							"var storageString = JSON.stringify(checkArray);",
+							"pm.collectionVariables.set(\"_oldDictionary\", storageString);"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"packages": {},
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{apiAddress}}/v3/scenarios/proxysniffer/dictionaries/{{dictionaryKey}}?auth_ticket={{api_key}}",
+					"protocol": "https",
+					"host": [
+						"{{apiAddress}}"
+					],
+					"path": [
+						"v3",
+						"scenarios",
+						"proxysniffer",
+						"dictionaries",
+						"{{dictionaryKey}}"
+					],
+					"query": [
+						{
+							"key": "auth_ticket",
+							"value": "{{api_key}}"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "PUT dictionary",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Original script created by {redacted}",
+							"// Updated for integration into Slack by Caleb Miller",
+							"// Created date: 2023-09-20",
+							"// Last update: 2023-10-03",
+							"// Revision: 1.0",
+							"//",
+							"// Required params in asm: ",
+							"// slack_service_id (for alerting to Slack)",
+							"// apiAddress ({redacted})",
+							"// api_key (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// top level check group ID (the top level group ID, can be found using {redacted})",
+							"",
+							"var failingAsmChecks = JSON.parse(pm.collectionVariables.get(\"_jsonString\"));",
+							"var oldDictEntries = JSON.parse(pm.collectionVariables.get(\"_oldDictionary\"));",
+							"var alertingArray = [];",
+							"var dictionaryBody = \"\";",
+							"",
+							"for (let i = 0; i < failingAsmChecks.length; i++) {",
+							"    //look through the array. check whether the check with the failing ID is already in the array; if it is, process further. Otherwise, it is a new failure and add it to the index.",
+							"    const foundIndex = oldDictEntries.findIndex(el => el.checkID == parseInt(failingAsmChecks[i].checkID));",
+							"    if (foundIndex >= 0){",
+							"        //Result exist in the dictionary meaning this is at least the second time this check is running fatal",
+							"        if(failingAsmChecks[i].severity != \"F\" && oldDictEntries[foundIndex].timeStamp != \"\"){",
+							"            //Result isn't fatal anymore, resolve the ticket",
+							"            alerterArrayCreator(failingAsmChecks[i].checkName, failingAsmChecks[i].checkID, failingAsmChecks[i].checkTypeName, failingAsmChecks[i].timeStamp, failingAsmChecks[i].errorMsg, failingAsmChecks[i].checkGUID, failingAsmChecks[i].severity, failingAsmChecks[i].resultId, failingAsmChecks[i].location)",
+							"        } else if (oldDictEntries[foundIndex].timeStamp != failingAsmChecks[i].timeStamp && failingAsmChecks[i].severity == \"F\"){",
+							"            //The result is new meaning we should send an alert",
+							"            //Create new dictionary array",
+							"            dictionaryArrayCreator(failingAsmChecks[i].checkID, failingAsmChecks[i].timeStamp)",
+							"",
+							"            // Create alerting array",
+							"            alerterArrayCreator(failingAsmChecks[i].checkName, failingAsmChecks[i].checkID, failingAsmChecks[i].checkTypeName, failingAsmChecks[i].timeStamp, failingAsmChecks[i].errorMsg, failingAsmChecks[i].checkGUID, failingAsmChecks[i].severity, failingAsmChecks[i].resultId, failingAsmChecks[i].location)",
+							"",
+							"        } else if (failingAsmChecks[i].severity == \"F\"){",
+							"            // The result is the same as the old one already alerted on",
+							"            //Create new dictionary array",
+							"            dictionaryArrayCreator(failingAsmChecks[i].checkID, failingAsmChecks[i].timeStamp)",
+							"        }",
+							"",
+							"    }else if (failingAsmChecks[i].severity == \"F\"){",
+							"        //This is the first consecutive fatal run",
+							"        //Create new dictionary array",
+							"        dictionaryArrayCreator(failingAsmChecks[i].checkID, failingAsmChecks[i].timeStamp)",
+							"        // Create alerting array",
+							"        alerterArrayCreator(failingAsmChecks[i].checkName, failingAsmChecks[i].checkID, failingAsmChecks[i].checkTypeName, failingAsmChecks[i].timeStamp, failingAsmChecks[i].errorMsg, failingAsmChecks[i].checkGUID, failingAsmChecks[i].severity, failingAsmChecks[i].resultId, failingAsmChecks[i].location)",
+							"    }",
+							"}",
+							"if (alertingArray == \"\"){ //if the alerting array is empty, don't post anything to Slack.",
+							"    var outMessage = \"alerting array was empty! No need to post to Slack.\"",
+							"    pm.collectionVariables.set(\"outMessage\",outMessage)",
+							"    postman.setNextRequest(null)",
+							"}else{",
+							"    pm.collectionVariables.set(\"_alertingArray\", JSON.stringify(alertingArray));",
+							"}",
+							"//take the processed entry out of the dictionary",
+							"pm.collectionVariables.set(\"_dictionaryBody\", dictionaryBody.slice(0, -1));",
+							"//set the alert counter for Slack to 0. The value will be incremented every time an entry is passed to Slack until 1 slack webhook is called for every failing check",
+							"pm.collectionVariables.set(\"_alertcounter\", 0);",
+							"",
+							"",
+							"function dictionaryArrayCreator(cID,cTime){",
+							"    dictionaryBody += '\"' + cID + '\": \"' + cTime + '\",'",
+							"}",
+							"",
+							"",
+							"function alerterArrayCreator(cName,cID,cCheckTypeName,cTime,cError,cGUID,cSev,cResultId,cLocation){",
+							"    var inputData = [",
+							"        {checkName: cName, checkID: cID, checkTypeName:cCheckTypeName, timeStamp: cTime, errorMsg: cError, checkGUID: cGUID, severity: cSev, resultId: cResultId, location: cLocation}",
+							"    ];",
+							"",
+							"    inputData.map(function(item) {        ",
+							"        alertingArray.push({ ",
+							"            \"checkName\" :   item.checkName,",
+							"            \"checkID\"   :   item.checkID,",
+							"            \"checkTypeName\" : item.checkTypeName,",
+							"            \"timeStamp\" :   item.timeStamp,",
+							"            \"errorMsg\"  :   item.errorMsg,",
+							"            \"checkGUID\" :   item.checkGUID,",
+							"            \"severity\"  :   item.severity,",
+							"            \"resultId\"  :   item.resultId,",
+							"            \"location\"  :   item.location",
+							"        });",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response must be 200 OK\", function () {",
+							"     pm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"dictionary\": {\n        {{_dictionaryBody}}\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{apiAddress}}/v3/scenarios/proxysniffer/dictionaries/{{dictionaryKey}}?auth_ticket={{api_key}}",
+					"protocol": "https",
+					"host": [
+						"{{apiAddress}}"
+					],
+					"path": [
+						"v3",
+						"scenarios",
+						"proxysniffer",
+						"dictionaries",
+						"{{dictionaryKey}}"
+					],
+					"query": [
+						{
+							"key": "auth_ticket",
+							"value": "{{api_key}}"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Slack",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Original script created by {redacted}",
+							"// Updated for integration into Slack by Caleb Miller",
+							"// Created date: 2023-09-20",
+							"// Last update: 2023-10-03",
+							"// Revision: 1.0",
+							"//",
+							"// Required params in asm: ",
+							"// slack_service_id (for alerting to Slack)",
+							"// apiAddress ({redacted}",
+							"// api_key (asm auth ticket)",
+							"// dictionaryKey (name to your dictionary)",
+							"// top level check group ID (the top level group ID, can be found using {redacted})",
+							"",
+							"var alertingArray = JSON.parse(pm.collectionVariables.get(\"_alertingArray\"));",
+							"//Send one alert for each failing check which wasn't already in the dictionary.",
+							"var i = parseInt(pm.collectionVariables.get(\"_alertcounter\"));",
+							"",
+							"if (alertingArray[i].severity == \"F\"){",
+							"    var sev = \"1\";",
+							"}else{",
+							"    var sev = \"0\";",
+							"}",
+							"",
+							"var customerTimezone = pm.environment.get(\"customerTimezone\")",
+							"const failureDate = new Date(alertingArray[i].timeStamp)",
+							"",
+							"const options = {",
+							"  timeZone: customerTimezone,",
+							"  timeZoneName: 'short'",
+							"};",
+							"",
+							"var alertBodyString =  `*${alertingArray[i].checkTypeName.replace(/[|&;$%@\"<>()+]/g, \"\")}* check failed. [${alertingArray[i].errorMsg.replace(/[|&;$%@\"<>()+]/g, \"\")}]. ",
+							"",
+							"The check *${alertingArray[i].checkName.replace(/[|&;$%@\"<>()+]/g, \"\")}* returned a *${alertingArray[i].severity}* at *${failureDate.toLocaleString('sv-SE', options)}*. ",
+							"",
+							"To view information about the check that caused this alert, use the following link: ",
+							"*<{redacted}?checkId=${alertingArray[i].checkID}&resultId=${alertingArray[i].resultId}>*.`",
+							"",
+							"i++;",
+							"",
+							"pm.collectionVariables.set(\"_alertbody\", alertBodyString);",
+							"pm.collectionVariables.set(\"_alertcounter\", i);"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response must be 200 OK\", function () {",
+							"     pm.response.to.have.status(200);",
+							"     pm.expect(pm.response.text()).to.include(\"ok\");",
+							"});",
+							"",
+							"var alertingArray = JSON.parse(pm.collectionVariables.get(\"_alertingArray\"));",
+							"var i = parseInt(pm.collectionVariables.get(\"_alertcounter\"));",
+							"",
+							"if (i < alertingArray.length){",
+							"    postman.setNextRequest(\"Slack\");",
+							"}else{",
+							"    pm.collectionVariables.set(\"_alertcounter\",0)",
+							"    postman.setNextRequest(null);",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"text\": \"{{_alertbody}}\"\n}"
+				},
+				"url": {
+					"raw": "https://hooks.slack.com/services/{{slack_service_id}}",
+					"protocol": "https",
+					"host": [
+						"hooks",
+						"slack",
+						"com"
+					],
+					"path": [
+						"services",
+						"{{slack_service_id}}"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "_jsonString",
+			"value": ""
+		},
+		{
+			"key": "_oldDictionary",
+			"value": ""
+		},
+		{
+			"key": "_alertingArray",
+			"value": ""
+		},
+		{
+			"key": "_dictionaryBody",
+			"value": ""
+		},
+		{
+			"key": "_alertbody",
+			"value": ""
+		},
+		{
+			"key": "_alertcounter",
+			"value": ""
+		},
+		{
+			"key": "nextIndex",
+			"value": "0",
+			"type": "string"
+		},
+		{
+			"key": "subGroupIdArr",
+			"value": "[]",
+			"type": "string"
+		},
+		{
+			"key": "activeSubgroupId",
+			"value": "0",
+			"type": "string"
+		},
+		{
+			"key": "checks",
+			"value": ""
+		},
+		{
+			"key": "activeCheck",
+			"value": ""
+		},
+		{
+			"key": "nextIndexForChecks",
+			"value": "0",
+			"type": "string"
+		}
+	]
+}
